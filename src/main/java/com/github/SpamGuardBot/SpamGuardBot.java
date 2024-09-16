@@ -8,6 +8,8 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.util.Arrays;
+
 @Slf4j
 @Component
 public class SpamGuardBot extends TelegramLongPollingBot{
@@ -26,19 +28,23 @@ public class SpamGuardBot extends TelegramLongPollingBot{
             long chatId = update.getMessage().getChatId();
             String memberName = update.getMessage().getFrom().getFirstName();
 
-            switch(messageText){
+            /*switch(messageText){
                 case "/start":
                     startBot(chatId, memberName);
                     break;
                 default: log.info("Unexpected message");
 
-            }
+            }*/
+            startBot(chatId, messageText);
         }
     }
-    private void startBot(long chatId, String memberName){
+    private void startBot(long chatId, String messageText){
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
-        message.setText("Hello, " + memberName + "! I'm a Telegtam bot.");
+        StringBuilder ans = new StringBuilder(messageText.toString());
+        ans.reverse();
+        message.setText(String.valueOf(ans));
+        System.out.println(messageText);
         try{
             execute(message);
             log.info("Reply sent");
