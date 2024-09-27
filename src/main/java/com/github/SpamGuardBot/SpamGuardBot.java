@@ -28,6 +28,9 @@ public class SpamGuardBot extends TelegramLongPollingBot{
             long chatId = update.getMessage().getChatId();
             String memberName = update.getMessage().getFrom().getFirstName();
 
+                //if (messageText.equals("Ч") || messageText.equals("Р")){
+                    //execute(InlineKeyboard.hermitageInlineKeyboardAb(chatId));
+               // }
             /*switch(messageText){
                 case "/start":
                     startBot(chatId, memberName);
@@ -35,16 +38,14 @@ public class SpamGuardBot extends TelegramLongPollingBot{
                 default: log.info("Unexpected message");
 
             }*/
-            startBot(chatId, messageText);
+            startBot(chatId);
         }
     }
-    private void startBot(long chatId, String messageText){
+    private void startBot(long chatId){
+
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
-        StringBuilder ans = new StringBuilder(messageText.toString());
-        ans.reverse();
-        message.setText(String.valueOf(ans));
-        System.out.println(messageText);
+
         try{
             execute(message);
             log.info("Reply sent");
