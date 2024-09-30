@@ -10,6 +10,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.Arrays;
 
+
 @Slf4j
 @Component
 public class SpamGuardBot extends TelegramLongPollingBot{
@@ -23,28 +24,56 @@ public class SpamGuardBot extends TelegramLongPollingBot{
     @Override
     public void onUpdateReceived(@NotNull Update update)
     {
-        if( update.hasMessage() && update.getMessage().hasText()){
+        if (update.hasMessage() && update.getMessage().hasText()){
             String messageText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
-            String memberName = update.getMessage().getFrom().getFirstName();
 
-            /*switch(messageText){
-                case "/start":
-                    startBot(chatId, memberName);
-                    break;
-                default: log.info("Unexpected message");
+            if (!messageText.isEmpty()){
+                try {
+                    execute(Button.InlineKeyboard(chatId));
+                } catch (TelegramApiException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            if (update.hasCallbackQuery()){
+                String call_data = update.getCallbackQuery().getData();
+                SendMessage message = new SendMessage();
+                message.setChatId(String.valueOf(chatId));
 
-            }*/
-            startBot(chatId, messageText);
+                if (call_data.equals("ЧЕЛОВЕК")){
+                    message.setText(String.valueOf("Человеков мы любим"));
+                    System.out.println(messageText);
+                    try {
+                        execute(message);
+                        log.info("Reply sent");
+                    }
+                    catch(TelegramApiException e){
+                        log.error(e.getMessage());
+                    }
+                }
+
+                else if (call_data.equals("РОБОТ")){
+                    message.setText(String.valueOf("Роботы стоять"));
+                    System.out.println(messageText);
+                    try {
+                        execute(message);
+                        log.info("Reply sent");
+                    }
+                    catch(TelegramApiException e){
+                        log.error(e.getMessage());
+                    }
+                }
+
+            }
+
         }
     }
-    private void startBot(long chatId, String messageText){
+
+    private void startBot(long chatId){
+
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
-        StringBuilder ans = new StringBuilder(messageText.toString());
-        ans.reverse();
-        message.setText(String.valueOf(ans));
-        System.out.println(messageText);
+
         try{
             execute(message);
             log.info("Reply sent");
