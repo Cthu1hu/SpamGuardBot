@@ -9,5 +9,4 @@ class SpamGuardBotApplicationTests {
 	@Test
 	void contextLoads() {
 	}
-
 }
