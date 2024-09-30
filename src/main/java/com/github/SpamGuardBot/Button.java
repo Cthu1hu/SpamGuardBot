@@ -10,7 +10,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,56 +31,10 @@ public class Button extends TelegramLongPollingBot {
     @Override
     public String getBotToken() { return config.getToken(); }
 
-
     long chatId = 0;
 
-    @Override
-    public void onUpdateReceived(@NotNull Update update)
-    {
-        if (update.hasMessage() && update.getMessage().hasText()){
-            String messageText = update.getMessage().getText();
-            chatId = update.getMessage().getChatId();
 
-            if (messageText.equals("А-Я")){
-                try {
-                    execute(InlineKeyboard(chatId));
-                } catch (TelegramApiException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            else if (update.hasCallbackQuery()){
-                String call_data = update.getCallbackQuery().getData();
-                SendMessage message = new SendMessage();
-                message.setChatId(String.valueOf(chatId));
 
-                if (call_data.equals("ЧЕЛОВЕК")){
-                    message.setText(String.valueOf("Человеков мы любим"));
-                    System.out.println(messageText);
-                    try {
-                        execute(message);
-                        log.info("Reply sent");
-                    }
-                    catch(TelegramApiException e){
-                        log.error(e.getMessage());
-                    }
-                }
-
-                else if (call_data.equals("РОБОТ")){
-                    message.setText(String.valueOf("Роботы стоять"));
-                    System.out.println(messageText);
-                    try {
-                        execute(message);
-                        log.info("Reply sent");
-                    }
-                    catch(TelegramApiException e){
-                        log.error(e.getMessage());
-                    }
-                }
-
-            }
-
-        }
-    }
 
     public static SendMessage InlineKeyboard (long chatId){
         SendMessage message = new SendMessage();
@@ -113,4 +66,8 @@ public class Button extends TelegramLongPollingBot {
         return message;
     }
 
+    @Override
+    public void onUpdateReceived(Update update) {
+
+    }
 }
