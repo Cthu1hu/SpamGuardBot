@@ -5,8 +5,13 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.User;
+
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+
 
 
 
@@ -22,58 +27,54 @@ public class SpamGuardBot extends TelegramLongPollingBot{
     public String getBotToken() { return config.getToken(); }
     @Override
     public void onUpdateReceived(@NotNull Update update) {
-        if (update.hasMessage() && update.getMessage().hasText()) {
-            String messageText = update.getMessage().getText();
-            long chatId = update.getMessage().getChatId();
+        if (update.hasMessage()) {
+            var message = update.getMessage();
+            long chatId = message.getChatId();
 
-            if (!messageText.isEmpty()) {
-                try {
-                    execute(Button.InlineKeyboard(chatId));
-                } catch (TelegramApiException e) {
-                    throw new RuntimeException(e);
+            // Проверка на добавление новых участников
+            if (message.getNewChatMembers() != null && !message.getNewChatMembers().isEmpty()) {
+                for (User newUser : message.getNewChatMembers()) {
+                    // Отправка сообщения с кнопками для новых участников
+                    sendVerificationMessage(chatId);
                 }
             }
         }
 
+        // Обработка CallbackQuery
         if (update.hasCallbackQuery()) {
-            String call_data = update.getCallbackQuery().getData();
-            long chatId = update.getCallbackQuery().getMessage().getChatId();
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-
-            if (call_data.equals("ЧЕЛОВЕК")) {
-                message.setText("Человеков мы любим");
-                System.out.println(call_data);
-                try {
-                    execute(message);
-                    log.info("Reply sent");
-                } catch (TelegramApiException e) {
-                    log.error(e.getMessage());
-                }
-            } else if (call_data.equals("РОБОТ")) {
-                message.setText("Роботы стоять");
-                System.out.println(call_data);
-                try {
-                    execute(message);
-                    log.info("Reply sent");
-                } catch (TelegramApiException e) {
-                    log.error(e.getMessage());
-                }
-            }
+            handleCallbackQuery(update.getCallbackQuery());
         }
     }
 
-    private void startBot(long chatId){
+    private void sendVerificationMessage(long chatId) {
+        // Используем метод из Button для создания сообщения с кнопками
+        SendMessage message = Button.InlineKeyboard(chatId);
 
+        try {
+            execute(message);
+            log.info("Verification message sent to chat: " + chatId);
+        } catch (TelegramApiException e) {
+            log.error("Failed to send verification message with buttons: " + e.getMessage());
+        }
+    }
+
+    private void handleCallbackQuery(CallbackQuery callbackQuery) {
+        String callData = callbackQuery.getData();
+        long chatId = callbackQuery.getMessage().getChatId();
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
 
-        try{
-            execute(message);
-            log.info("Reply sent");
+        if ("ЧЕЛОВЕК".equals(callData)) {
+            message.setText("Человеков мы любим");
+        } else if ("РОБОТ".equals(callData)) {
+            message.setText("Роботы стоять");
         }
-        catch(TelegramApiException e){
-            log.error(e.getMessage());
+
+        try {
+            execute(message);
+            log.info("Callback response sent to chat: " + chatId);
+        } catch (TelegramApiException e) {
+            log.error("Failed to send callback response: " + e.getMessage());
         }
     }
 }
