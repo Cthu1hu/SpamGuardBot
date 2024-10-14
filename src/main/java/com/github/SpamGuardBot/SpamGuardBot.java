@@ -31,30 +31,46 @@ public class SpamGuardBot extends TelegramLongPollingBot{
             var message = update.getMessage();
             long chatId = message.getChatId();
 
-            // Проверка на добавление новых участников
+            if ((message.getGroupchatCreated() != null && message.getGroupchatCreated()) ||
+                    (message.getSuperGroupCreated() != null && message.getSuperGroupCreated())) {
+                sendWelcomeMessage(chatId);
+            }
+
             if (message.getNewChatMembers() != null && !message.getNewChatMembers().isEmpty()) {
                 for (User newUser : message.getNewChatMembers()) {
-                    // Отправка сообщения с кнопками для новых участников
                     sendVerificationMessage(chatId);
                 }
             }
         }
 
-        // Обработка CallbackQuery
         if (update.hasCallbackQuery()) {
             handleCallbackQuery(update.getCallbackQuery());
         }
     }
 
+    private void sendWelcomeMessage(long chatId) {
+        String welcomeText = "Привет! Я - SpamGuardBot, и я здесь, чтобы помочь защитить эту группу от спама! " +
+                "Каждый новый участник должен будет пройти проверку.";
+        SendMessage welcomeMessage = new SendMessage();
+        welcomeMessage.setChatId(String.valueOf(chatId));
+        welcomeMessage.setText(welcomeText);
+
+        try {
+            execute(welcomeMessage);
+            log.info("Welcome message sent to chat: " + chatId);
+        } catch (TelegramApiException e) {
+            log.error("Failed to send welcome message: " + e.getMessage());
+        }
+    }
+
     private void sendVerificationMessage(long chatId) {
-        // Используем метод из Button для создания сообщения с кнопками
         SendMessage message = Button.InlineKeyboard(chatId);
 
         try {
             execute(message);
             log.info("Verification message sent to chat: " + chatId);
         } catch (TelegramApiException e) {
-            log.error("Failed to send verification message with buttons: " + e.getMessage());
+            log.error("Failed to send verification message: " + e.getMessage());
         }
     }
 
