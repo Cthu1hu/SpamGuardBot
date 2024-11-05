@@ -1,4 +1,5 @@
 package com.github.SpamGuardBot;
+
 import com.github.SpamGuardBot.config.BotConfig;
 import jakarta.validation.constraints.NotNull;
 import lombok.SneakyThrows;
@@ -14,18 +15,26 @@ import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 
-
-
 @Slf4j
 @Component
-public class SpamGuardBot extends TelegramLongPollingBot{
+public class SpamGuardBot extends TelegramLongPollingBot {
     final BotConfig config;
+    private Long newUserId = null; // Поле для хранения ID нового участника
 
-    public SpamGuardBot(BotConfig config) { this.config = config; }
+    public SpamGuardBot(BotConfig config) {
+        this.config = config;
+    }
+
     @Override
-    public String getBotUsername() { return config.getBotName(); }
+    public String getBotUsername() {
+        return config.getBotName();
+    }
+
     @Override
-    public String getBotToken() { return config.getToken(); }
+    public String getBotToken() {
+        return config.getToken();
+    }
+
     @SneakyThrows
     @Override
     public void onUpdateReceived(@NotNull Update update) {
@@ -46,6 +55,7 @@ public class SpamGuardBot extends TelegramLongPollingBot{
                         return;
                     }
 
+                    newUserId = newUser.getId(); // Сохраняем ID нового участника
                     sendVerificationMessage(chatId);
                 }
             }
@@ -72,7 +82,6 @@ public class SpamGuardBot extends TelegramLongPollingBot{
         }
     }
 
-
     private void sendVerificationMessage(long chatId) {
         SendMessage message = Button.InlineKeyboard(chatId);
 
@@ -88,11 +97,17 @@ public class SpamGuardBot extends TelegramLongPollingBot{
         }
     }
 
-
-
     private void handleCallbackQuery(CallbackQuery callbackQuery) {
         String callData = callbackQuery.getData();
         long chatId = callbackQuery.getMessage().getChatId();
+        Long userId = callbackQuery.getFrom().getId(); // ID пользователя, который отправил коллбэк
+
+        // Проверка, совпадает ли ID пользователя с ID нового участника
+        if (newUserId == null || !newUserId.equals(userId)) {
+            log.info("User " + userId + " is not allowed to respond to the verification message.");
+            return;
+        }
+
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
 
