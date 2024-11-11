@@ -68,6 +68,8 @@ public class SpamGuardBot extends TelegramLongPollingBot {
         }
     }
 
+
+
     private void sendWelcomeMessage(long chatId) {
         String welcomeText = "Привет! Я - SpamGuardBot, и я здесь, чтобы помочь защитить эту группу от спама!";
         SendMessage welcomeMessage = new SendMessage();
@@ -93,7 +95,7 @@ public class SpamGuardBot extends TelegramLongPollingBot {
             return sentMessage.getMessageId(); // Возвращаем ID сообщения для таймера
         } catch (TelegramApiException e) {
             if (e.getMessage().contains("[403] Forbidden")) {
-                log.error("Cannot send message to chat " + chatId + ": The bot was removed or the chat was deleted.");
+                log.error("Cannot send message to chat " + chatId + ": The bot was removed or the chat was deleted!");
             } else {
                 log.error("Failed to send verification message: " + e.getMessage());
             }
@@ -108,7 +110,7 @@ public class SpamGuardBot extends TelegramLongPollingBot {
 
         // Проверка, совпадает ли ID пользователя с ID нового участника
         if (newUserId == null || !newUserId.equals(userId)) {
-            log.info("User " + userId + " is not allowed to respond to the verification message.");
+            log.info("User " + userId + " is not allowed to respond to the verification message!");
             return;
         }
 
