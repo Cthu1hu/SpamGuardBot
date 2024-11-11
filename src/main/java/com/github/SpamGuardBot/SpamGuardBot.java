@@ -1,7 +1,7 @@
 package com.github.SpamGuardBot;
 
 import com.github.SpamGuardBot.config.BotConfig;
-import com.github.SpamGuardBot.config.MessageDeleteTimer; // Импортируем ваш таймер
+import com.github.SpamGuardBot.config.MessageDeleteTimer;
 import jakarta.validation.constraints.NotNull;
 import lombok.SneakyThrows;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -121,6 +121,13 @@ public class SpamGuardBot extends TelegramLongPollingBot {
             timer.cancel(); // Отменяем таймер на удаление и исключение
         } else if ("РОБОТ".equals(callData)) {
             message.setText("Роботы стоять");
+            try {
+                timer.cancel(); // Отменяем таймер, если пользователь сам выбрал "РОБОТ"
+                timer.kickUser(chatId, userId); // Исключаем пользователя
+                log.info("User " + userId + " kicked for selecting 'РОБОТ'.");
+            } catch (TelegramApiException e) {
+                log.error("Failed to kick user " + userId + ": " + e.getMessage());
+            }
         }
 
         try {
