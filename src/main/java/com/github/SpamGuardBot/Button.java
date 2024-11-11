@@ -5,6 +5,8 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -33,12 +35,9 @@ public class Button extends TelegramLongPollingBot {
 
     long chatId = 0;
 
-
-
-
     public static SendMessage InlineKeyboard (long chatId){
         SendMessage message = new SendMessage();
-        message.setChatId(chatId);
+        message.setChatId(String.valueOf(chatId));
         message.setText("Выбери, кто ты");
 
         InlineKeyboardMarkup markupInline = new InlineKeyboardMarkup();

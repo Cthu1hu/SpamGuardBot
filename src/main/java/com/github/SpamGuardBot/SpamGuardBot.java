@@ -1,6 +1,7 @@
 package com.github.SpamGuardBot;
 
 import com.github.SpamGuardBot.config.BotConfig;
+import com.github.SpamGuardBot.config.MessageDeleteTimer; // Импортируем ваш таймер
 import jakarta.validation.constraints.NotNull;
 import lombok.SneakyThrows;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -8,21 +9,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
-
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
-
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-
 
 @Slf4j
 @Component
 public class SpamGuardBot extends TelegramLongPollingBot {
     final BotConfig config;
     private Long newUserId = null; // Поле для хранения ID нового участника
+    private Integer verificationMessageId = null; // ID сообщения с проверкой для удаления
+    private MessageDeleteTimer timer; // Экземпляр таймера
 
     public SpamGuardBot(BotConfig config) {
         this.config = config;
+        this.timer = new MessageDeleteTimer(this); // Создаем таймер с передачей бота
     }
 
     @Override
@@ -56,7 +57,8 @@ public class SpamGuardBot extends TelegramLongPollingBot {
                     }
 
                     newUserId = newUser.getId(); // Сохраняем ID нового участника
-                    sendVerificationMessage(chatId);
+                    verificationMessageId = sendVerificationMessage(chatId); // Сохраняем ID сообщения
+                    timer.startResponseTimer(message, verificationMessageId); // Запускаем таймер для удаления
                 }
             }
         }
@@ -82,18 +84,20 @@ public class SpamGuardBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendVerificationMessage(long chatId) {
-        SendMessage message = Button.InlineKeyboard(chatId);
+    private Integer sendVerificationMessage(long chatId) {
+        SendMessage message = Button.InlineKeyboard(chatId); // Сообщение с кнопкой для проверки
 
         try {
-            execute(message);
+            var sentMessage = execute(message);
             log.info("Verification message sent to chat: " + chatId);
+            return sentMessage.getMessageId(); // Возвращаем ID сообщения для таймера
         } catch (TelegramApiException e) {
             if (e.getMessage().contains("[403] Forbidden")) {
                 log.error("Cannot send message to chat " + chatId + ": The bot was removed or the chat was deleted.");
             } else {
                 log.error("Failed to send verification message: " + e.getMessage());
             }
+            return null;
         }
     }
 
@@ -113,6 +117,8 @@ public class SpamGuardBot extends TelegramLongPollingBot {
 
         if ("ЧЕЛОВЕК".equals(callData)) {
             message.setText("Человеков мы любим");
+            log.info("User " + userId + " verified as human, cancelling timer.");
+            timer.cancel(); // Отменяем таймер на удаление и исключение
         } else if ("РОБОТ".equals(callData)) {
             message.setText("Роботы стоять");
         }
