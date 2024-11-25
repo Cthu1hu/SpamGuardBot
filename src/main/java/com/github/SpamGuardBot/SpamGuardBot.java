@@ -52,13 +52,13 @@ public class SpamGuardBot extends TelegramLongPollingBot {
                     log.info("New member username: " + newUser.getUserName() + ", ID: " + newUser.getId());
 
                     if (newUser.getId().equals(getMe().getId())) {
-                        sendWelcomeMessage(chatId);
+                        sendWelcomeMessage(newUser.getId());
                         return;
                     }
 
                     newUserId = newUser.getId(); // Сохраняем ID нового участника
                     verificationMessageId = sendVerificationMessage(chatId); // Сохраняем ID сообщения
-                    timer.startResponseTimer(message, verificationMessageId); // Запускаем таймер для удаления
+                    timer.startResponseTimer(message, verificationMessageId,newUserId); // Запускаем таймер для удаления
                 }
             }
         }
@@ -67,7 +67,6 @@ public class SpamGuardBot extends TelegramLongPollingBot {
             handleCallbackQuery(update.getCallbackQuery());
         }
     }
-
 
 
     private void sendWelcomeMessage(long chatId) {
@@ -91,52 +90,40 @@ public class SpamGuardBot extends TelegramLongPollingBot {
 
         try {
             var sentMessage = execute(message);
-            log.info("Verification message sent to chat: " + chatId);
-            return sentMessage.getMessageId(); // Возвращаем ID сообщения для таймера
-        } catch (TelegramApiException e) {
-            if (e.getMessage().contains("[403] Forbidden")) {
-                log.error("Cannot send message to chat " + chatId + ": The bot was removed or the chat was deleted!");
+            if (sentMessage != null && sentMessage.getMessageId() != null) {
+                log.info("Verification message sent to chat: " + chatId);
+                return sentMessage.getMessageId(); // Возвращаем ID сообщения для таймера
             } else {
-                log.error("Failed to send verification message: " + e.getMessage());
+                log.error("Failed to retrieve message ID for verification message.");
             }
-            return null;
+        } catch (TelegramApiException e) {
+            log.error("Failed to send verification message: " + e.getMessage());
         }
+        return null;
     }
+
 
     private void handleCallbackQuery(CallbackQuery callbackQuery) {
         String callData = callbackQuery.getData();
-        long chatId = callbackQuery.getMessage().getChatId();
+        Long chatId = callbackQuery.getMessage().getChatId();
         Long userId = callbackQuery.getFrom().getId(); // ID пользователя, который отправил коллбэк
-
-        // Проверка, совпадает ли ID пользователя с ID нового участника
-        if (newUserId == null || !newUserId.equals(userId)) {
-            log.info("User " + userId + " is not allowed to respond to the verification message!");
-            return;
-        }
-
         SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-
+        // Если пользователь подтвердил, что он человек
         if ("ЧЕЛОВЕК".equals(callData)) {
-            message.setText("Человеков мы любим");
-            log.info("User " + userId + " verified as human, cancelling timer.");
-            timer.cancel(); // Отменяем таймер на удаление и исключение
-        } else if ("РОБОТ".equals(callData)) {
-            message.setText("Роботы стоять");
-            try {
-                timer.cancel(); // Отменяем таймер, если пользователь сам выбрал "РОБОТ"
-                timer.kickUser(chatId, userId); // Исключаем пользователя
-                log.info("User " + userId + " kicked for selecting 'РОБОТ'.");
-            } catch (TelegramApiException e) {
-                log.error("Failed to kick user " + userId + ": " + e.getMessage());
-            }
+            log.info("User " + userId + " verified as human.");
+            message.setText("Человеков мы любим!");
+            timer.cancel(newUserId); // Отменяем таймер
         }
-
-        try {
-            execute(message);
-            log.info("Callback response sent to chat: " + chatId);
-        } catch (TelegramApiException e) {
-            log.error("Failed to send callback response: " + e.getMessage());
+        // Если пользователь подтвердил, что он робот
+        else if ("РОБОТ".equals(callData)) {
+            log.info("User " + userId + " identified as robot.");
+            message.setText("Роботы стоять");
+            timer.cancel(newUserId); // Отменяем таймер, чтобы избежать повторного срабатывания
+            try {
+                timer.kickUser(chatId, newUserId); // Удаляем
+            } catch (TelegramApiException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 }

@@ -1,11 +1,15 @@
 package com.github.SpamGuardBot.config;
 
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
+import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.KickChatMember;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 
+import java.awt.desktop.SystemEventListener;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
@@ -20,54 +24,78 @@ public class MessageDeleteTimer {
     }
 
     // Запуск таймера для удаления сообщения и исключения пользователя
-    public void startResponseTimer(Message userMessage, Integer botWelcomeMessageId) {
-        Long userId = userMessage.getFrom().getId();
-        Long chatId = userMessage.getChatId();
+    public void startResponseTimer(Message userMessage, Integer botWelcomeMessageId,long newUserId) {
+        long userId = userMessage.getFrom().getId();
+        long chatId = userMessage.getChatId();
 
-        // Создаем новый таймер для каждого пользователя
+        // Создаем новый таймер
         Timer timer = new Timer();
         TimerTask task = new TimerTask() {
             @Override
             public void run() {
                 try {
-                    // Удаляем пользователя и приветственное сообщение, если он не ответил
-                    kickUser(chatId, userId);
-                    deleteMessage(chatId, botWelcomeMessageId);
-                    System.out.println("User " + userId + " has been kicked and message deleted due to timeout.");
+                    System.out.println("Timer expired for user " + newUserId + ". Kicking and deleting messages.");
+                    kickUser(chatId, newUserId); // Удаляем пользователя
+                    deleteMessage(chatId, botWelcomeMessageId); // Удаляем приветственное сообщение
                 } catch (TelegramApiException e) {
-                    e.printStackTrace();
-                } finally {
-                    userTimers.remove(userId); // Удаляем таймер из списка после выполнения
+                    System.out.println("Error kicking user " + newUserId + ": " + e.getMessage());
+                }
+                finally {
+                    //timer.cancel();
                 }
             }
         };
 
-        timer.schedule(task, 30000); // Таймер на 30 секунд
-        userTimers.put(userId, timer); // Сохраняем таймер для возможности отмены
+        // Запускаем таймер на 30 секунд
+        timer.schedule(task, 8000);
+        userTimers.put(newUserId, timer); // Сохраняем таймер
     }
 
-    // Метод для отмены таймера по ID пользователя
-    public void cancel() {
-        Timer timer = userTimers.get(userTimers);
+    public void cancel(Long userId) {
+        Timer timer = userTimers.get(userId);
         if (timer != null) {
+            System.out.println("Cancelling timer for user " + userId);
             timer.cancel(); // Отменяем таймер
-            userTimers.remove(userTimers); // Удаляем таймер из списка
+            userTimers.remove(userId); // Удаляем запись о таймере
         }
     }
-
-    // Исключение пользователя из чата
     public void kickUser(Long chatId, Long userId) throws TelegramApiException {
         KickChatMember kick = new KickChatMember();
         kick.setChatId(chatId.toString());
         kick.setUserId(userId);
-        bot.execute(kick);
+
+        try {
+            bot.execute(kick); // Выполняем удаление пользователя
+            System.out.println("User " + userId + " kicked from chat " + chatId);
+        } catch (TelegramApiException e) {
+            if (e.getMessage().contains("can't remove chat owner")) {
+                System.out.println("Cannot kick chat owner with ID " + userId);
+            } else {
+                throw e; // Пробрасываем исключение для обработки
+            }
+        }
     }
+
+
+
+
+
+
 
     // Удаление сообщения бота
     private void deleteMessage(Long chatId, Integer messageId) throws TelegramApiException {
         DeleteMessage deleteMessage = new DeleteMessage();
         deleteMessage.setChatId(chatId.toString());
         deleteMessage.setMessageId(messageId);
-        bot.execute(deleteMessage);
+
+        try {
+            bot.execute(deleteMessage); // Выполняем удаление
+            System.out.println("Deleted message with ID " + messageId + " in chat " + chatId);
+        } catch (TelegramApiException e) {
+            System.out.println("Failed to delete message " + messageId + " in chat " + chatId + ": " + e.getMessage());
+        }
     }
+
+
+
 }
