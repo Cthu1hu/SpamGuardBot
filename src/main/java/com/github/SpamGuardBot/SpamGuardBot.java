@@ -4,22 +4,31 @@ import com.github.SpamGuardBot.config.BotConfig;
 import com.github.SpamGuardBot.config.MessageDeleteTimer;
 import jakarta.validation.constraints.NotNull;
 import lombok.SneakyThrows;
-import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
+import com.github.SpamGuardBot.config.PhotoSender;
+
+import java.io.File;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
 public class SpamGuardBot extends TelegramLongPollingBot {
     final BotConfig config;
-    private Long newUserId = null; // Поле для хранения ID нового участника
+    private Long newUserId = null; // ID нового участника
     private Integer verificationMessageId = null; // ID сообщения с проверкой для удаления
     private MessageDeleteTimer timer; // Экземпляр таймера
+    private final Set<Long> pendingUsers = ConcurrentHashMap.newKeySet(); // ID пользователей, проходящих проверку
 
     public SpamGuardBot(BotConfig config) {
         this.config = config;
@@ -40,7 +49,7 @@ public class SpamGuardBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(@NotNull Update update) {
         if (update.hasMessage()) {
-            var message = update.getMessage();
+            Message message = update.getMessage();
             long chatId = message.getChatId();
 
             log.info("Received a message update in chat: " + chatId);
@@ -56,26 +65,22 @@ public class SpamGuardBot extends TelegramLongPollingBot {
                         return;
                     }
 
-                    newUserId = newUser.getId(); // Сохраняем ID нового участника
-                    verificationMessageId = sendVerificationMessage(chatId); // Сохраняем ID сообщения
-                    timer.startResponseTimer(message, verificationMessageId,newUserId); // Запускаем таймер для удаления
+                    newUserId = newUser.getId();
+                    verificationMessageId = sendVerificationMessage(chatId, "D:\\ph.jpg"); // Отправляем сообщение с проверкой
+                    pendingUsers.add(newUserId); // Добавляем пользователя в список проверяемых
+                    timer.startResponseTimer(message, verificationMessageId, newUserId); // Запускаем таймер
                 }
+            } else if (message.getReplyToMessage() != null && pendingUsers.contains(message.getFrom().getId())) {
+                handleUserResponse(chatId, message);
             }
         }
-
-        if (update.hasCallbackQuery()) {
-            handleCallbackQuery(update.getCallbackQuery());
-        }
     }
-
 
     private void sendWelcomeMessage(long chatId) {
         String welcomeText = "Привет! Я - SpamGuardBot, и я здесь, чтобы помочь защитить эту группу от спама!";
         SendMessage welcomeMessage = new SendMessage();
         welcomeMessage.setChatId(String.valueOf(chatId));
         welcomeMessage.setText(welcomeText);
-
-        log.info("Preparing to send welcome message to chat: " + chatId + " with text: " + welcomeText);
 
         try {
             execute(welcomeMessage);
@@ -85,44 +90,42 @@ public class SpamGuardBot extends TelegramLongPollingBot {
         }
     }
 
-    private Integer sendVerificationMessage(long chatId) {
-        SendMessage message = Button.InlineKeyboard(chatId); // Сообщение с кнопкой для проверки
+    private Integer sendVerificationMessage(long chatId, String filePath) {
+        // Создаем объект PhotoSender
+        PhotoSender photoSender = new PhotoSender(this);
 
-        try {
-            var sentMessage = execute(message);
-            if (sentMessage != null && sentMessage.getMessageId() != null) {
-                log.info("Verification message sent to chat: " + chatId);
-                return sentMessage.getMessageId(); // Возвращаем ID сообщения для таймера
-            } else {
-                log.error("Failed to retrieve message ID for verification message.");
-            }
-        } catch (TelegramApiException e) {
-            log.error("Failed to send verification message: " + e.getMessage());
-        }
-        return null;
+        // Отправляем фото через PhotoSender и возвращаем messageId
+        return photoSender.sendPhoto(chatId, filePath);
     }
 
 
-    private void handleCallbackQuery(CallbackQuery callbackQuery) {
-        String callData = callbackQuery.getData();
-        Long chatId = callbackQuery.getMessage().getChatId();
-        Long userId = callbackQuery.getFrom().getId(); // ID пользователя, который отправил коллбэк
-        SendMessage message = new SendMessage();
-        // Если пользователь подтвердил, что он человек
-        if ("ЧЕЛОВЕК".equals(callData)) {
-            log.info("User " + userId + " verified as human.");
-            message.setText("Человеков мы любим!");
-            timer.cancel(newUserId); // Отменяем таймер
-        }
-        // Если пользователь подтвердил, что он робот
-        else if ("РОБОТ".equals(callData)) {
-            log.info("User " + userId + " identified as robot.");
-            message.setText("Роботы стоять");
-            timer.cancel(newUserId); // Отменяем таймер, чтобы избежать повторного срабатывания
+
+    private void handleUserResponse(long chatId, Message message) {
+        String userResponse = message.getText().toLowerCase().trim();
+        List<String> validResponses = List.of("матан", "матанализ", "математический анализ", "мат анализ");
+
+        if (validResponses.contains(userResponse)) {
             try {
-                timer.kickUser(chatId, newUserId); // Удаляем
+                deleteMessages(chatId, verificationMessageId, message.getMessageId());
+                log.info("User " + message.getFrom().getId() + " passed verification.");
+                pendingUsers.remove(message.getFrom().getId());
             } catch (TelegramApiException e) {
-                throw new RuntimeException(e);
+                log.error("Failed to delete verification messages: " + e.getMessage());
+            }
+        } else {
+            try {
+                timer.kickUser(chatId, message.getFrom().getId()); // Удаляем пользователя
+                log.info("User " + message.getFrom().getId() + " failed verification and was removed.");
+            } catch (TelegramApiException e) {
+                log.error("Failed to kick user: " + e.getMessage());
+            }
+        }
+    }
+
+    private void deleteMessages(long chatId, Integer... messageIds) throws TelegramApiException {
+        for (Integer messageId : messageIds) {
+            if (messageId != null) {
+                execute(new org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage(String.valueOf(chatId), messageId));
             }
         }
     }
