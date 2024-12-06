@@ -66,7 +66,7 @@ public class SpamGuardBot extends TelegramLongPollingBot {
                     }
 
                     newUserId = newUser.getId();
-                    verificationMessageId = sendVerificationMessage(chatId, "D:\\ph.jpg"); // Отправляем сообщение с проверкой
+                    verificationMessageId = sendVerificationMessage(chatId, "C:\\Users\\M.Yurkevich\\ph.jpg"); // Отправляем сообщение с проверкой
                     pendingUsers.add(newUserId); // Добавляем пользователя в список проверяемых
                     timer.startResponseTimer(message, verificationMessageId, newUserId); // Запускаем таймер
                 }
@@ -108,7 +108,7 @@ public class SpamGuardBot extends TelegramLongPollingBot {
             try {
                 deleteMessages(chatId, verificationMessageId, message.getMessageId());
                 log.info("User " + message.getFrom().getId() + " passed verification.");
-                pendingUsers.remove(message.getFrom().getId());
+                //pendingUsers.remove(message.getFrom().getId());
             } catch (TelegramApiException e) {
                 log.error("Failed to delete verification messages: " + e.getMessage());
             }

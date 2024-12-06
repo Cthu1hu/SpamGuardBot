@@ -22,7 +22,7 @@ public class PhotoSender {
         SendPhoto sendPhoto = new SendPhoto();
         sendPhoto.setChatId(String.valueOf(chatId));  // Устанавливаем ID чата
         sendPhoto.setPhoto(new InputFile(new File(filePath)));  // Устанавливаем путь к фото
-
+        sendPhoto.setCaption("По какому предметы данный сборник?");
         try {
             // Отправляем фото и получаем сообщение
             Message message = bot.execute(sendPhoto);

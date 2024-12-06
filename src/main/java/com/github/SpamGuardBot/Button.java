@@ -1,6 +1,6 @@
 package com.github.SpamGuardBot;
 import com.github.SpamGuardBot.config.BotConfig;
-import jakarta.validation.constraints.NotNull;
+
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

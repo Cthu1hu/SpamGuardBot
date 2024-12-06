@@ -5,7 +5,7 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMem
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
-import org.telegram.telegrambots.meta.api.methods.groupadministration.KickChatMember;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.BanChatMember;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 
@@ -60,7 +60,7 @@ public class MessageDeleteTimer {
         }
     }
     public void kickUser(Long chatId, Long userId) throws TelegramApiException {
-        KickChatMember kick = new KickChatMember();
+        var kick = new BanChatMember();
         kick.setChatId(chatId.toString());
         kick.setUserId(userId);
 
