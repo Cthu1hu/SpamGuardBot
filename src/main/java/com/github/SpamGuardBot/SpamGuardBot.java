@@ -8,16 +8,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.meta.api.objects.InputFile;
 import com.github.SpamGuardBot.config.PhotoSender;
 
-import java.io.File;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,25 +23,51 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class SpamGuardBot extends TelegramLongPollingBot {
     final BotConfig config;
-    private Long newUserId = null; // ID нового участника
-    private Integer verificationMessageId = null; // ID сообщения с проверкой для удаления
-    private MessageDeleteTimer timer; // Экземпляр таймера
-    private final Set<Long> pendingUsers = ConcurrentHashMap.newKeySet(); // ID пользователей, проходящих проверку
+    private Long newUserId = null;
+    private Integer verificationMessageId = null;
+    private MessageDeleteTimer timer;
+    private final Set<Long> pendingUsers = ConcurrentHashMap.newKeySet();
+
+    // Структура для картинок, описаний и допустимых ответов
+    private static class VerificationImage {
+        String filePath;
+        String description;
+        List<String> validResponses;
+
+        public VerificationImage(String filePath, String description, List<String> validResponses) {
+            this.filePath = filePath;
+            this.description = description;
+            this.validResponses = validResponses;
+        }
+    }
+
+    // Список картинок, описаний и допустимых ответов
+    private List<VerificationImage> verificationImages = List.of(
+            new VerificationImage("C:\\Users\\M.Yurkevich\\ph1.jpg", "По какому предмету эта книга?",
+                    List.of("матан", "матанализ", "математический анализ", "мат анализ", "Матан", "Матанализ", "Математический анализ", "Мат анализ")),
+            new VerificationImage("C:\\Users\\M.Yurkevich\\ph2.jpg", "Назовите наазвание этой теоремы.",
+                    List.of("Теорема Виета", "теорема виета", "виета", "Виета")),
+            new VerificationImage("C:\\Users\\M.Yurkevich\\ph3.jpg", "Что это за язык программирования?",
+                    List.of("джава", "Джава", "Java", "java")),
+            new VerificationImage("C:\\Users\\M.Yurkevich\\ph4.jpg", "Вычислите определитель матрицы второго порядка.",
+                    List.of("2", "два")),
+            new VerificationImage("C:\\Users\\M.Yurkevich\\ph5.jpg", "Вычислите объем куба. ",
+                    List.of("105", "сто пять", "105м", "105м^3"))
+    );
+
+    private final Random random = new Random(); // Для случайного выбора картинки
 
     public SpamGuardBot(BotConfig config) {
         this.config = config;
-        this.timer = new MessageDeleteTimer(this); // Создаем таймер с передачей бота
+        this.timer = new MessageDeleteTimer(this);
     }
 
-    @Override
     public String getBotUsername() {
         return config.getBotName();
     }
 
     @Override
-    public String getBotToken() {
-        return config.getToken();
-    }
+    public String getBotToken() { return config.getToken(); }
 
     @SneakyThrows
     @Override
@@ -66,7 +90,7 @@ public class SpamGuardBot extends TelegramLongPollingBot {
                     }
 
                     newUserId = newUser.getId();
-                    verificationMessageId = sendVerificationMessage(chatId, "C:\\Users\\M.Yurkevich\\ph.jpg"); // Отправляем сообщение с проверкой
+                    verificationMessageId = sendVerificationMessage(chatId);
                     pendingUsers.add(newUserId); // Добавляем пользователя в список проверяемых
                     timer.startResponseTimer(message, verificationMessageId, newUserId); // Запускаем таймер
                 }
@@ -90,25 +114,31 @@ public class SpamGuardBot extends TelegramLongPollingBot {
         }
     }
 
-    private Integer sendVerificationMessage(long chatId, String filePath) {
+    private Integer sendVerificationMessage(long chatId) {
+        // Случайный выбор картинки из списка
+        int randomIndex = random.nextInt(verificationImages.size());
+        VerificationImage randomImage = verificationImages.get(randomIndex);
+
         // Создаем объект PhotoSender
         PhotoSender photoSender = new PhotoSender(this);
 
         // Отправляем фото через PhotoSender и возвращаем messageId
-        return photoSender.sendPhoto(chatId, filePath);
+        return photoSender.sendPhoto(chatId, randomImage.filePath, randomImage.description);
     }
-
-
 
     private void handleUserResponse(long chatId, Message message) {
         String userResponse = message.getText().toLowerCase().trim();
-        List<String> validResponses = List.of("матан", "матанализ", "математический анализ", "мат анализ");
 
-        if (validResponses.contains(userResponse)) {
+        // Преобразуем список картинок в карту с возможностью поиска картинки по пути
+        VerificationImage currentImage = verificationImages.stream()
+                .filter(image -> image.filePath.equals(message.getReplyToMessage().getText())) // Ищем картинку по пути
+                .findFirst()
+                .orElse(null);
+
+        if (currentImage != null && currentImage.validResponses.contains(userResponse)) {
             try {
                 deleteMessages(chatId, verificationMessageId, message.getMessageId());
                 log.info("User " + message.getFrom().getId() + " passed verification.");
-                //pendingUsers.remove(message.getFrom().getId());
             } catch (TelegramApiException e) {
                 log.error("Failed to delete verification messages: " + e.getMessage());
             }

@@ -47,7 +47,7 @@ public class MessageDeleteTimer {
         };
 
         // Запускаем таймер на 30 секунд
-        timer.schedule(task, 8000);
+        timer.schedule(task, 20000);
         userTimers.put(newUserId, timer); // Сохраняем таймер
     }
 
