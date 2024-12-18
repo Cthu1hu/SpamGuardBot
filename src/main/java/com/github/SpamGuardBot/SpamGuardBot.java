@@ -1,6 +1,7 @@
 package com.github.SpamGuardBot;
 
 import com.github.SpamGuardBot.config.BotConfig;
+import com.github.SpamGuardBot.config.DatabaseManager;
 import com.github.SpamGuardBot.config.MessageDeleteTimer;
 import jakarta.validation.constraints.NotNull;
 import lombok.SneakyThrows;
@@ -77,6 +78,12 @@ public class SpamGuardBot extends TelegramLongPollingBot {
             Message message = update.getMessage();
             long chatId = message.getChatId();
 
+            // Если пользователь пишет команду для получения всех забаненных пользователей
+            if (message.getText().equals("/users")) {
+                // Выводим список всех забаненных пользователей
+                DatabaseManager.getAllUsers();
+            }
+
             if (message.getNewChatMembers() != null && !message.getNewChatMembers().isEmpty()) {
                 for (User newUser : message.getNewChatMembers()) {
                     if (newUser.getId().equals(getMe().getId())) {
@@ -84,16 +91,28 @@ public class SpamGuardBot extends TelegramLongPollingBot {
                         return;
                     }
 
-                    newUserId = newUser.getId();
-                    verificationMessageId = sendVerificationMessage(chatId);
-                    pendingUsers.add(newUserId);
-                    timer.startResponseTimer(message, verificationMessageId, newUserId);
+                    // Проверка, есть ли пользователь в базе данных
+                    if (DatabaseManager.isUserInDatabase(newUser.getId())) {
+                        try {
+                            // Если пользователь в базе, его сразу кикаем
+                            timer.kickUser(chatId, newUser.getId());
+                        } catch (TelegramApiException e) {
+                            log.error("Failed to kick user: {}", e.getMessage());
+                        }
+                    } else {
+                        newUserId = newUser.getId();
+                        verificationMessageId = sendVerificationMessage(chatId);
+                        pendingUsers.add(newUserId);
+                        timer.startResponseTimer(message, verificationMessageId, newUserId);
+                    }
                 }
             } else if (message.getReplyToMessage() != null && pendingUsers.contains(message.getFrom().getId())) {
                 handleUserResponse(chatId, message);
             }
         }
     }
+
+
 
     private void sendWelcomeMessage(long chatId) {
         String welcomeText = "Привет! Я - SpamGuardBot, и я здесь, чтобы помочь защитить эту группу от спама!";
@@ -115,14 +134,28 @@ public class SpamGuardBot extends TelegramLongPollingBot {
         return photoSender.sendPhoto(chatId, randomImage.filePath, randomImage.description);
     }
 
-    private void handleUserResponse(long chatId, Message message) {
+    public void handleUserResponse(long chatId, Message message) {
         long userId = message.getFrom().getId();
         String userResponse = message.getText().toLowerCase().trim();
         log.info(userResponse);
-        Random random = new Random();
+
+        // Проверка, есть ли пользователь в базе данных
+        if (DatabaseManager.isUserInDatabase(userId)) {
+            try {
+                // Если пользователь есть в базе, его нужно кикнуть
+                timer.kickUser(chatId, userId);
+                pendingUsers.remove(userId);
+            } catch (TelegramApiException e) {
+                log.error("Failed to kick user: {}", e.getMessage());
+            }
+            return; // Прерываем выполнение, если пользователь уже в базе
+        }
+
+        // Логика для обработки ответа пользователя
         VerificationImage currentImage = new VerificationImage();
         currentImage.validResponses = verificationImages.stream().findAny().get().validResponses;
         System.out.println(currentImage.validResponses);
+
         if (currentImage.validResponses.contains(userResponse)) {
             try {
                 timer.cancel(userId);
@@ -133,6 +166,8 @@ public class SpamGuardBot extends TelegramLongPollingBot {
             }
         } else {
             try {
+                // Если ответ неправильный, добавляем пользователя в базу данных
+                DatabaseManager.addUser(userId);
                 timer.cancel(userId);
                 timer.kickUser(chatId, userId);
                 pendingUsers.remove(userId);
@@ -140,10 +175,6 @@ public class SpamGuardBot extends TelegramLongPollingBot {
                 log.error("Failed to kick user: {}", e.getMessage());
             }
         }
-    }
-
-    private void cancelTimer(Long userId) {
-        timer.cancel(userId);
     }
 
     private void deleteMessages(long chatId, Integer... messageIds) throws TelegramApiException {
