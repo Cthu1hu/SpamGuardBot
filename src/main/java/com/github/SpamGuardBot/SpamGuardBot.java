@@ -28,34 +28,35 @@ public class SpamGuardBot extends TelegramLongPollingBot {
     private MessageDeleteTimer timer;
     private final Set<Long> pendingUsers = ConcurrentHashMap.newKeySet();
 
-    // Структура для картинок, описаний и допустимых ответов
     private static class VerificationImage {
         String filePath;
         String description;
         List<String> validResponses;
 
-        public VerificationImage(String filePath, String description, List<String> validResponses) {
+        public VerificationImage(String filePath, String description) {
             this.filePath = filePath;
             this.description = description;
-            this.validResponses = validResponses;
+            this.validResponses = List.of("матан", "матанализ", "математический анализ", "мат анализ","Виета", "виета", "Виета","джава","два","2","105");
+        }
+
+        public VerificationImage() {
+
         }
     }
 
-    // Список картинок, описаний и допустимых ответов
     private List<VerificationImage> verificationImages = List.of(
-            new VerificationImage("C:\\Users\\M.Yurkevich\\ph1.jpg", "По какому предмету эта книга?",
-                    List.of("матан", "матанализ", "математический анализ", "мат анализ", "Матан", "Матанализ", "Математический анализ", "Мат анализ")),
-            new VerificationImage("C:\\Users\\M.Yurkevich\\ph2.jpg", "Назовите наазвание этой теоремы.",
-                    List.of("Теорема Виета", "теорема виета", "виета", "Виета")),
-            new VerificationImage("C:\\Users\\M.Yurkevich\\ph3.jpg", "Что это за язык программирования?",
-                    List.of("джава", "Джава", "Java", "java")),
-            new VerificationImage("C:\\Users\\M.Yurkevich\\ph4.jpg", "Вычислите определитель матрицы второго порядка.",
-                    List.of("2", "два")),
-            new VerificationImage("C:\\Users\\M.Yurkevich\\ph5.jpg", "Вычислите объем куба. ",
-                    List.of("105", "сто пять", "105м", "105м^3"))
+            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph1.jpg", "По какому предмету эта книга?"),
+            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph2.jpg", "Назовите название этой теоремы."),
+
+            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph3.jpg", "Что за язык"),
+
+            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph4.jpg", "Определитель?????"),
+
+            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph5.jpg", "навали Value")
+
     );
 
-    private final Random random = new Random(); // Для случайного выбора картинки
+    private final Random random = new Random();
 
     public SpamGuardBot(BotConfig config) {
         this.config = config;
@@ -76,14 +77,8 @@ public class SpamGuardBot extends TelegramLongPollingBot {
             Message message = update.getMessage();
             long chatId = message.getChatId();
 
-            log.info("Received a message update in chat: " + chatId);
-
             if (message.getNewChatMembers() != null && !message.getNewChatMembers().isEmpty()) {
-                log.info("New members detected in chat: " + chatId);
-
                 for (User newUser : message.getNewChatMembers()) {
-                    log.info("New member username: " + newUser.getUserName() + ", ID: " + newUser.getId());
-
                     if (newUser.getId().equals(getMe().getId())) {
                         sendWelcomeMessage(newUser.getId());
                         return;
@@ -91,8 +86,8 @@ public class SpamGuardBot extends TelegramLongPollingBot {
 
                     newUserId = newUser.getId();
                     verificationMessageId = sendVerificationMessage(chatId);
-                    pendingUsers.add(newUserId); // Добавляем пользователя в список проверяемых
-                    timer.startResponseTimer(message, verificationMessageId, newUserId); // Запускаем таймер
+                    pendingUsers.add(newUserId);
+                    timer.startResponseTimer(message, verificationMessageId, newUserId);
                 }
             } else if (message.getReplyToMessage() != null && pendingUsers.contains(message.getFrom().getId())) {
                 handleUserResponse(chatId, message);
@@ -108,48 +103,47 @@ public class SpamGuardBot extends TelegramLongPollingBot {
 
         try {
             execute(welcomeMessage);
-            log.info("Welcome message sent to chat: " + chatId);
         } catch (TelegramApiException e) {
-            log.error("Failed to send welcome message: " + e.getMessage());
+            log.error("Failed to send welcome message: {}", e.getMessage());
         }
     }
 
     private Integer sendVerificationMessage(long chatId) {
-        // Случайный выбор картинки из списка
         int randomIndex = random.nextInt(verificationImages.size());
         VerificationImage randomImage = verificationImages.get(randomIndex);
-
-        // Создаем объект PhotoSender
         PhotoSender photoSender = new PhotoSender(this);
-
-        // Отправляем фото через PhotoSender и возвращаем messageId
         return photoSender.sendPhoto(chatId, randomImage.filePath, randomImage.description);
     }
 
     private void handleUserResponse(long chatId, Message message) {
+        long userId = message.getFrom().getId();
         String userResponse = message.getText().toLowerCase().trim();
-
-        // Преобразуем список картинок в карту с возможностью поиска картинки по пути
-        VerificationImage currentImage = verificationImages.stream()
-                .filter(image -> image.filePath.equals(message.getReplyToMessage().getText())) // Ищем картинку по пути
-                .findFirst()
-                .orElse(null);
-
-        if (currentImage != null && currentImage.validResponses.contains(userResponse)) {
+        log.info(userResponse);
+        Random random = new Random();
+        VerificationImage currentImage = new VerificationImage();
+        currentImage.validResponses = verificationImages.stream().findAny().get().validResponses;
+        System.out.println(currentImage.validResponses);
+        if (currentImage.validResponses.contains(userResponse)) {
             try {
+                timer.cancel(userId);
                 deleteMessages(chatId, verificationMessageId, message.getMessageId());
-                log.info("User " + message.getFrom().getId() + " passed verification.");
+                pendingUsers.remove(userId);
             } catch (TelegramApiException e) {
-                log.error("Failed to delete verification messages: " + e.getMessage());
+                log.error("Failed to delete verification messages: {}", e.getMessage());
             }
         } else {
             try {
-                timer.kickUser(chatId, message.getFrom().getId()); // Удаляем пользователя
-                log.info("User " + message.getFrom().getId() + " failed verification and was removed.");
+                timer.cancel(userId);
+                timer.kickUser(chatId, userId);
+                pendingUsers.remove(userId);
             } catch (TelegramApiException e) {
-                log.error("Failed to kick user: " + e.getMessage());
+                log.error("Failed to kick user: {}", e.getMessage());
             }
         }
+    }
+
+    private void cancelTimer(Long userId) {
+        timer.cancel(userId);
     }
 
     private void deleteMessages(long chatId, Integer... messageIds) throws TelegramApiException {

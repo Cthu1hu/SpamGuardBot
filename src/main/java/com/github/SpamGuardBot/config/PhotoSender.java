@@ -19,7 +19,14 @@ public class PhotoSender {
     public Integer sendPhoto(long chatId, String filePath, String caption) {
         SendPhoto sendPhoto = new SendPhoto();
         sendPhoto.setChatId(String.valueOf(chatId));
-        sendPhoto.setPhoto(new InputFile(new File(filePath)));
+
+        File photoFile = new File(filePath);
+        if (!photoFile.exists()) {
+            System.err.println("File not found: " + filePath);
+            return null;
+        }
+
+        sendPhoto.setPhoto(new InputFile(photoFile));
         sendPhoto.setCaption(caption); // Теперь описание передается как параметр
         try {
             Message message = bot.execute(sendPhoto);

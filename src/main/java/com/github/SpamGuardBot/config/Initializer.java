@@ -18,7 +18,7 @@ public class Initializer {
 
     @EventListener({ContextRefreshedEvent.class})
     public void init(){
-        try{
+        try{DatabaseManager.initializeDatabase();
             TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
             telegramBotsApi.registerBot((LongPollingBot) bot);
         } catch (TelegramApiException e) {
