@@ -12,7 +12,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class MessageDeleteTimer {
-    private final TelegramLongPollingBot bot;
+    private static TelegramLongPollingBot bot = null;
     private final Map<Long, Timer> userTimers = new HashMap<>();
 
     public MessageDeleteTimer(TelegramLongPollingBot bot) {
@@ -63,7 +63,7 @@ public class MessageDeleteTimer {
             }
         }
     }
-    private void deleteMessage(Long chatId, Integer messageId) throws TelegramApiException {
+    public static void deleteMessage(Long chatId, Integer messageId) throws TelegramApiException {
         if (messageId == null) {
             return;
         }

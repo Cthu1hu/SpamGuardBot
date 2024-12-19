@@ -2,6 +2,7 @@ package com.github.SpamGuardBot;
 
 import com.github.SpamGuardBot.config.BotConfig;
 import com.github.SpamGuardBot.config.MessageDeleteTimer;
+import com.github.SpamGuardBot.config.UserDatabaseManager;
 import jakarta.validation.constraints.NotNull;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,8 @@ public class SpamGuardBot extends TelegramLongPollingBot {
     private Integer verificationMessageId = null;
     private MessageDeleteTimer timer;
     private final Set<Long> pendingUsers = ConcurrentHashMap.newKeySet();
+    private final UserDatabaseManager userDatabaseManager = new UserDatabaseManager();
+
 
     private static class VerificationImage {
         String filePath;
@@ -45,14 +48,14 @@ public class SpamGuardBot extends TelegramLongPollingBot {
     }
 
     private List<VerificationImage> verificationImages = List.of(
-            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph1.jpg", "По какому предмету эта книга?"),
-            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph2.jpg", "Назовите название этой теоремы."),
+            new VerificationImage("C:\\Users\\User\\Downloads\\ph1.jpg", "По какому предмету эта книга?"),
+            new VerificationImage("C:\\Users\\User\\Downloads\\ph2.jpg", "Что это за теорема?"),
 
-            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph3.jpg", "Что за язык"),
+            new VerificationImage("C:\\Users\\User\\Downloads\\ph3.jpg", "Что за язык программирования?"),
 
-            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph4.jpg", "Определитель?????"),
+            new VerificationImage("C:\\Users\\User\\Downloads\\ph4.jpg", "Посчитайте определитель данной матрицы"),
 
-            new VerificationImage("C:\\Users\\ursvn\\Downloads\\ph5.jpg", "навали Value")
+            new VerificationImage("C:\\Users\\User\\Downloads\\ph5.jpg", "Посчитай объем данного тела")
 
     );
 
@@ -70,8 +73,8 @@ public class SpamGuardBot extends TelegramLongPollingBot {
     @Override
     public String getBotToken() { return config.getToken(); }
 
-    @SneakyThrows
     @Override
+    @SneakyThrows
     public void onUpdateReceived(@NotNull Update update) {
         if (update.hasMessage()) {
             Message message = update.getMessage();
@@ -85,15 +88,22 @@ public class SpamGuardBot extends TelegramLongPollingBot {
                     }
 
                     newUserId = newUser.getId();
-                    verificationMessageId = sendVerificationMessage(chatId);
-                    pendingUsers.add(newUserId);
-                    timer.startResponseTimer(message, verificationMessageId, newUserId);
+
+                    // Проверяем, есть ли пользователь в базе данных
+                    if (userDatabaseManager.isUserExcluded(newUserId)) {
+                        timer.kickUser(chatId, newUserId);
+                    } else {
+                        verificationMessageId = sendVerificationMessage(chatId);
+                        pendingUsers.add(newUserId);
+                        timer.startResponseTimer(message, verificationMessageId, newUserId);
+                    }
                 }
             } else if (message.getReplyToMessage() != null && pendingUsers.contains(message.getFrom().getId())) {
                 handleUserResponse(chatId, message);
             }
         }
     }
+
 
     private void sendWelcomeMessage(long chatId) {
         String welcomeText = "Привет! Я - SpamGuardBot, и я здесь, чтобы помочь защитить эту группу от спама!";
@@ -115,7 +125,7 @@ public class SpamGuardBot extends TelegramLongPollingBot {
         return photoSender.sendPhoto(chatId, randomImage.filePath, randomImage.description);
     }
 
-    private void handleUserResponse(long chatId, Message message) {
+    private void handleUserResponse(long chatId, Message message) throws TelegramApiException {
         long userId = message.getFrom().getId();
         String userResponse = message.getText().toLowerCase().trim();
         log.info(userResponse);
@@ -124,33 +134,26 @@ public class SpamGuardBot extends TelegramLongPollingBot {
         currentImage.validResponses = verificationImages.stream().findAny().get().validResponses;
         System.out.println(currentImage.validResponses);
         if (currentImage.validResponses.contains(userResponse)) {
-            try {
-                timer.cancel(userId);
-                deleteMessages(chatId, verificationMessageId, message.getMessageId());
-                pendingUsers.remove(userId);
-            } catch (TelegramApiException e) {
-                log.error("Failed to delete verification messages: {}", e.getMessage());
-            }
+            timer.cancel(userId);
+            pendingUsers.remove(userId);
         } else {
             try {
                 timer.cancel(userId);
                 timer.kickUser(chatId, userId);
+                userDatabaseManager.addExcludedUser(userId); // Добавляем в базу данных
                 pendingUsers.remove(userId);
             } catch (TelegramApiException e) {
                 log.error("Failed to kick user: {}", e.getMessage());
             }
         }
+        MessageDeleteTimer.deleteMessage(chatId, verificationMessageId);
+        MessageDeleteTimer.deleteMessage(chatId, message.getMessageId());
     }
+
 
     private void cancelTimer(Long userId) {
         timer.cancel(userId);
     }
 
-    private void deleteMessages(long chatId, Integer... messageIds) throws TelegramApiException {
-        for (Integer messageId : messageIds) {
-            if (messageId != null) {
-                execute(new org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage(String.valueOf(chatId), messageId));
-            }
-        }
-    }
+
 }
